@@ -125,9 +125,19 @@ int elf_sh_load(int argc, char **argv, const char *buf, off_t len,
 		command_line = modified_cmdline;
 	}
 
-	/* If we're booting a vmlinux then fill in empty_zero_page */
-	if (elf_rel_find_symbol(&ehdr, "empty_zero_page", &sym) == 0) {
-		char *zp = (void *)ehdr.e_shdr[sym.st_shndx].sh_data;
+	/* If we're booting a vmlinux then fill in the boot params page.
+	 * The kernel used to reuse its mm zero page for the boot params
+	 * and the symbol was called empty_zero_page. Since kernel commit
+	 * 6215d9f4470f ("arch, mm: consolidate empty_zero_page") the
+	 * boot params page is called boot_params_page and empty_zero_page
+	 * is the generic mm zero page, which is a different page that has
+	 * to stay zeroed, so look for the new name first.
+	 */
+	if (elf_rel_find_symbol(&ehdr, "boot_params_page", &sym) == 0 ||
+	    elf_rel_find_symbol(&ehdr, "empty_zero_page", &sym) == 0) {
+		struct mem_shdr *shdr = &ehdr.e_shdr[sym.st_shndx];
+		char *zp = (char *)shdr->sh_data +
+			   (sym.st_value - shdr->sh_addr);
 
 		kexec_sh_setup_zero_page(zp, 4096, command_line);
 	}
