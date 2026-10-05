@@ -66,6 +66,7 @@ void zImage_sh_usage(void)
 {
 	printf(
     " --append=STRING      Set the kernel command line to STRING.\n"
+    " --initrd=FILE        Use FILE as the kernel's initial ramdisk.\n"
     " --empty-zero=ADDRESS Set the kernel top ADDRESS. \n\n");
 
 }
@@ -74,8 +75,10 @@ int zImage_sh_load(int argc, char **argv, const char *buf, off_t len,
 	struct kexec_info *info)
 {
         char *command_line;
+	char *ramdisk;
 	int opt;
 	unsigned long empty_zero, zero_page_base, zero_page_size, k;
+	unsigned long initrd_start, initrd_size;
 	unsigned long image_base;
 	char *param;
 
@@ -87,6 +90,8 @@ int zImage_sh_load(int argc, char **argv, const char *buf, off_t len,
 	static const char short_options[] = KEXEC_ARCH_OPT_STR "";
 
 	command_line = 0;
+	ramdisk = 0;
+	initrd_start = initrd_size = 0;
 	while ((opt = getopt_long(argc, argv, short_options, options, 0)) != -1) {
 		switch (opt) {
 		default:
@@ -96,6 +101,9 @@ int zImage_sh_load(int argc, char **argv, const char *buf, off_t len,
 			}
 		case OPT_APPEND:
 			command_line = optarg;
+			break;
+		case OPT_RAMDISK:
+			ramdisk = optarg;
 			break;
 		}
 	}
@@ -110,6 +118,10 @@ int zImage_sh_load(int argc, char **argv, const char *buf, off_t len,
 	 */
 
 	empty_zero = zImage_head32(buf, HEAD32_KERNEL_START_ADDR);
+
+	if (ramdisk)
+		kexec_sh_load_initrd(info, ramdisk, virt_to_phys(empty_zero),
+				     &initrd_start, &initrd_size);
 
 	zero_page_size = 0x10000;
 	zero_page_base = virt_to_phys(empty_zero - zero_page_size);
@@ -126,7 +138,8 @@ int zImage_sh_load(int argc, char **argv, const char *buf, off_t len,
 	param = xmalloc(zero_page_size);
 	for (k = 0; k < (zero_page_size / 0x1000); k++)
 		kexec_sh_setup_zero_page(param + (k * 0x1000), 0x1000,
-					 command_line);
+					 command_line, initrd_start,
+					 initrd_size);
 
 	add_segment(info, param, zero_page_size,
 		    0x80000000 | zero_page_base, zero_page_size);

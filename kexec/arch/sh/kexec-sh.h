@@ -24,6 +24,11 @@ void netbsd_sh_usage(void);
 
 char *get_append(void);
 void kexec_sh_setup_zero_page(char *zero_page_buf, size_t zero_page_size,
-			      char *cmd_line);
+			      char *cmd_line, unsigned long initrd_start,
+			      unsigned long initrd_size);
+void kexec_sh_load_initrd(struct kexec_info *info, const char *path,
+			  unsigned long kernel_addr,
+			  unsigned long *initrd_start,
+			  unsigned long *initrd_size);
 
 #endif /* KEXEC_SH_H */

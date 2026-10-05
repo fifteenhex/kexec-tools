@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include <unistd.h>
 #include "../../kexec.h"
 #include "../../kexec-syscall.h"
 #include "kexec-sh.h"
@@ -166,11 +167,22 @@ char *get_append(void)
 }
 
 void kexec_sh_setup_zero_page(char *zero_page_buf, size_t zero_page_size,
-			      char *cmd_line)
+			      char *cmd_line, unsigned long initrd_start,
+			      unsigned long initrd_size)
 {
 	size_t n = zero_page_size - 0x100;
 
 	memset(zero_page_buf, 0, zero_page_size);
+
+	if (initrd_size) {
+		/* Matches the boot params layout in the kernel's
+		 * arch/sh/include/asm/setup.h: LOADER_TYPE, INITRD_START
+		 * as an offset from the start of RAM, and INITRD_SIZE.
+		 */
+		*(uint32_t *)(zero_page_buf + 0x0c) = 1;
+		*(uint32_t *)(zero_page_buf + 0x10) = initrd_start;
+		*(uint32_t *)(zero_page_buf + 0x14) = initrd_size;
+	}
 
 	if (cmd_line) {
 		if (n > strlen(cmd_line))
@@ -179,6 +191,45 @@ void kexec_sh_setup_zero_page(char *zero_page_buf, size_t zero_page_size,
 		memcpy(zero_page_buf + 0x100, cmd_line, n);
 		zero_page_buf[0x100 + n] = '\0';
 	}
+}
+
+/*
+ * Load an initrd at the top of the RAM bank holding the kernel, where
+ * neither zImage self relocation nor kernel decompression will reach
+ * it, and report the position the boot params want: an offset from
+ * the start of RAM and a size.
+ */
+void kexec_sh_load_initrd(struct kexec_info *info, const char *path,
+			  unsigned long kernel_addr,
+			  unsigned long *initrd_start,
+			  unsigned long *initrd_size)
+{
+	unsigned long start = 0, end = 0, base;
+	off_t len;
+	char *buf;
+	int i;
+
+	buf = slurp_file(path, &len);
+
+	for (i = 0; i < info->memory_ranges; i++) {
+		start = info->memory_range[i].start;
+		end = info->memory_range[i].end;
+		if (kernel_addr >= start && kernel_addr <= end)
+			break;
+	}
+	if (i == info->memory_ranges)
+		die("No memory range contains the kernel at %p\n",
+		    (void *)kernel_addr);
+
+	base = ((end + 1) - _ALIGN(len, getpagesize())) &
+	       ~(getpagesize() - 1UL);
+	if (base <= kernel_addr)
+		die("No room for the initrd above the kernel\n");
+
+	add_segment(info, buf, len, 0x80000000 | base, len);
+
+	*initrd_start = base - start;
+	*initrd_size = len;
 }
 
 static int is_32bit(void)

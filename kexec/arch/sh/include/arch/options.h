@@ -6,6 +6,7 @@
 #define OPT_EMPTYZERO    (OPT_ARCH_MAX+2)
 #define OPT_NBSD_HOWTO   (OPT_ARCH_MAX+3)
 #define OPT_NBSD_MROOT   (OPT_ARCH_MAX+4)
+#define OPT_RAMDISK      (OPT_ARCH_MAX+5)
 
 /* Options relevant to the architecture (excluding loader-specific ones): */
 #define KEXEC_ARCH_OPTIONS \
@@ -14,7 +15,9 @@
         {"append",         1, 0, OPT_APPEND}, \
         {"empty-zero",     1, 0, OPT_APPEND}, \
         {"howto",          1, 0, OPT_NBSD_HOWTO}, \
-        {"miniroot",       1, 0, OPT_NBSD_MROOT},
+        {"miniroot",       1, 0, OPT_NBSD_MROOT}, \
+        {"initrd",         1, 0, OPT_RAMDISK}, \
+        {"ramdisk",        1, 0, OPT_RAMDISK},
 /* These options seem to be loader-specific rather than superh-specific, so
  * ought to be moved to KEXEC_ALL_OPTIONS below and parsed in the relevant
  * loader, e.g. kexec-netbsd-sh.c
