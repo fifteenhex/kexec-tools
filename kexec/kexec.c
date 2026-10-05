@@ -869,6 +869,22 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 		result = kexec_load(info.entry,
 				    info.nr_segments, info.segment,
 				    info.kexec_flags);
+
+	/*
+	 * The kernel may not know KEXEC_DEBUG, it was added to kexec-tools
+	 * before any kernel accepted it. -d shouldn't make the load fail
+	 * on such kernels, so try again without it.
+	 */
+	if (result != 0 && errno == EINVAL &&
+	    !xen_present() && (info.kexec_flags & KEXEC_DEBUG)) {
+		dbgprintf("kexec_load failed with EINVAL, retrying without "
+			  "KEXEC_DEBUG in case the kernel doesn't know it\n");
+		info.kexec_flags &= ~KEXEC_DEBUG;
+		result = kexec_load(info.entry,
+				    info.nr_segments, info.segment,
+				    info.kexec_flags);
+	}
+
 	if (result != 0) {
 		/* The load failed, print some debugging information */
 		fprintf(stderr, "kexec_load failed: %s\n", 
