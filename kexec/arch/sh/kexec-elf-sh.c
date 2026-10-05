@@ -63,6 +63,7 @@ int elf_sh_probe(const char *buf, off_t len)
 void elf_sh_usage(void)
 {
 	printf("  --append=STRING       Set the kernel command line to STRING\n"
+	       "  --initrd=FILE         Use FILE as the kernel's initial ramdisk\n"
 		);
 }
 
@@ -72,6 +73,8 @@ int elf_sh_load(int argc, char **argv, const char *buf, off_t len,
 	struct mem_ehdr ehdr;
 	char *command_line;
 	char *modified_cmdline;
+	char *ramdisk;
+	unsigned long initrd_start, initrd_size;
 	struct mem_sym sym;
 	int opt, rc;
 	static const struct option options[] = {
@@ -85,6 +88,8 @@ int elf_sh_load(int argc, char **argv, const char *buf, off_t len,
 	 * Parse the command line arguments
 	 */
 	command_line = modified_cmdline = 0;
+	ramdisk = 0;
+	initrd_start = initrd_size = 0;
 	while((opt = getopt_long(argc, argv, short_options, options, 0)) != -1) {
 		switch(opt) {
 		default:
@@ -95,8 +100,17 @@ int elf_sh_load(int argc, char **argv, const char *buf, off_t len,
 		case OPT_APPEND:
 			command_line = optarg;
 			break;
+		case OPT_RAMDISK:
+			ramdisk = optarg;
+			break;
 		}
 	}
+
+	/* Fall back to the current command line like the zImage loader
+	 * does, arch_usage() promises this.
+	 */
+	if (!command_line)
+		command_line = get_append();
 
 	/* Need to append some command line parameters internally in case of
 	 * taking crash dumps.
@@ -114,6 +128,11 @@ int elf_sh_load(int argc, char **argv, const char *buf, off_t len,
 	/* Load the ELF executable */
 	elf_exec_build_load(info, &ehdr, buf, len, 0);
 	info->entry = (void *)virt_to_phys(ehdr.e_entry);
+
+	if (ramdisk)
+		kexec_sh_load_initrd(info, ramdisk,
+				     virt_to_phys(ehdr.e_entry),
+				     &initrd_start, &initrd_size);
 
 	/* If panic kernel is being loaded, additional segments need
 	 * to be created. */
@@ -139,7 +158,8 @@ int elf_sh_load(int argc, char **argv, const char *buf, off_t len,
 		char *zp = (char *)shdr->sh_data +
 			   (sym.st_value - shdr->sh_addr);
 
-		kexec_sh_setup_zero_page(zp, 4096, command_line);
+		kexec_sh_setup_zero_page(zp, 4096, command_line,
+					 initrd_start, initrd_size);
 	}
 
 	return 0;
